@@ -1,62 +1,240 @@
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.io.IOException;
 
 public class Main {
     public static void main(String[] args) {
-        String filename = "disk_data.bin";
+        System.setErr(System.out);
 
-        FileHeader header = new FileHeader();
-        header.fieldNames = Arrays.asList("name", "age", "city");
-        header.fieldSizes = Arrays.asList(10, 4, 20); // 총 34바이트 + 1 + 4 = 최소 39바이트 per record
-        header.recordCount = 0;
-        header.firstBlockOffset = Constants.BLOCK_SIZE;
+        Scanner sc = new Scanner(System.in);
 
-        try (RandomAccessFile raf = new RandomAccessFile(filename, "rw")) {
-            // 초기 헤더 기록
-            header.writeHeader(raf);
+        while(true) {
+            System.out.println("1. 파일 생성");
+            System.out.println("2. 레코드 삽입");
+            System.out.println("3. 필드 값 추출");
+            System.out.println("4. 레코드 범위 조회");
+            System.out.println("5. 프로그램 종료");
+            System.out.print("원하는 작업을 선택하세요 (1~5): ");
 
-            for (int i = 1; i <= 20; i++) {
-                String name = "User" + i;
-                String age = String.valueOf(20 + i);
-                String city = "City" + i;
-                Record rec = new Record(Arrays.asList(name, age, city));
-                header.addRecord(raf, rec);
-            }
-
-            System.out.println("20개 레코드 삽입 완료!");
-
-            // 전체 레코드 출력 (블록 탐색)
-            FileHeader readHeader = new FileHeader();
-            readHeader.readHeader(raf);
-
-            int currentBlockOffset = readHeader.firstBlockOffset;
-            int totalRead = 0;
-            while (currentBlockOffset != -1) {
-                Block block = Block.readBlock(raf, currentBlockOffset, readHeader.fieldSizes);
-                System.out.println("=== 블록 시작 offset: " + currentBlockOffset + " ===");
-                for (Record r : block.records) {
-                    System.out.println(r);
-                    totalRead++;
+            int choice;
+            try {
+                choice = Integer.parseInt(sc.nextLine().trim());
+                if (choice < 1 || choice > 5) {
+                    System.err.println("[오류] 1부터 5 사이의 숫자를 입력해주세요.\n");
+                    continue;
                 }
-                currentBlockOffset = block.nextBlockOffset;
+            } catch (NumberFormatException e) {
+                System.out.flush();
+                System.err.println("[오류] 숫자를 입력해주세요.\n");
+                continue;
             }
 
-            System.out.println("총 읽은 레코드 수: " + totalRead);
-
-        } catch (IOException e) {
-            e.printStackTrace();
+            try {
+                switch (choice) {
+                    case 1 -> {
+                        System.out.print("데이터가 담긴 파일의 이름을 입력해주세요: ");
+                        String inputFile = sc.nextLine();
+                        DBStorageManager.createFileHeader(inputFile);
+                        System.out.println("파일 생성 완료");
+                    }
+                    case 2 -> {
+                        System.out.print("데이터가 담긴 파일의 이름을 입력해주세요: ");
+                        String inputFile = sc.nextLine();
+                        DBStorageManager.insertRecords(inputFile);
+                    }
+                    case 3 -> {
+                        System.out.print("데이터가 담긴 파일의 이름을 입력해주세요: ");
+                        String inputFile = sc.nextLine();
+                        List<String> values = DBStorageManager.extractFieldValues(inputFile);
+                        System.out.println("필드 값들:");
+                        for (String val : values) {
+                            System.out.println(val);
+                        }
+                    }
+                    case 4 -> {
+                        System.out.print("데이터가 담긴 파일의 이름을 입력해주세요: ");
+                        String inputFile = sc.nextLine();
+                        List<Record> records = DBStorageManager.getRecordsInRangeFromFile(inputFile);
+                        System.out.println("범위 내 레코드:");
+                        for (Record r : records) {
+                            System.out.println(r);
+                        }
+                    }
+                    case 5 -> {
+                        System.out.println("프로그램을 종료합니다.");
+                        System.exit(0);
+                    }
+                    default -> System.out.println("유효하지 않은 선택입니다. 1부터 5 사이의 숫자를 입력해주세요.\n");
+                }
+            } catch (java.nio.file.NoSuchFileException e) {
+                System.err.println("[오류] 존재하지 않는 파일입니다.\n");
+            } catch (IOException e) {
+                System.err.println("[오류] 입출력 오류: " + e.getMessage() + "\n");
+            } catch (IllegalArgumentException e) {
+                System.err.println("[오류] 입력 오류: " + e.getMessage() + "\n");
+            } catch (Exception e) {
+                System.err.println("[오류] 예상치 못한 오류가 발생했습니다: " + e.getMessage() + "\n");
+            }
         }
     }
 }
 
-class FileHeader {
+class DBStorageManager {
+    public static void createFileHeader(String fileDataFile) throws IOException {
+        List<String> lines = Files.readAllLines(Paths.get(fileDataFile));
+
+        if (lines.size() < 4) {
+            throw new IllegalArgumentException("파일의 형식이 잘못되었습니다.");
+        }
+
+        String rawFilename = lines.get(0).trim();
+        String outputFilename = rawFilename.toLowerCase().endsWith(Constants.FILE_EXTENSION) ? rawFilename : rawFilename + Constants.FILE_EXTENSION;
+
+        int fieldCount = Integer.parseInt(lines.get(1).trim());
+
+        List<String> fieldNames = Arrays.asList(lines.get(2).trim().split(Constants.DELIMITER));
+        List<Integer> fieldSizes = new ArrayList<>();
+        for (String sizeStr : lines.get(3).trim().split(Constants.DELIMITER)) {
+            fieldSizes.add(Integer.parseInt(sizeStr));
+        }
+
+        if (fieldNames.size() != fieldCount || fieldSizes.size() != fieldCount) {
+            throw new IllegalArgumentException("필드 개수와 이름/크기 수가 일치하지 않습니다.");
+        }
+
+        File header = new File();
+        header.fieldNames = fieldNames;
+        header.fieldSizes = fieldSizes;
+        // TODO: 할당 필요한지 확인 필요 -> 레코드 삽입 함수 구현 후 확인
+        header.recordCount = 0;
+        header.firstBlockOffset = Constants.BLOCK_SIZE;
+
+        try (RandomAccessFile raf = new RandomAccessFile(outputFilename, "rw")) {
+            header.writeFileHeader(raf);
+        }
+    }
+
+    public static void insertRecords(String recordDataFile) throws IOException {
+        List<String> lines = Files.readAllLines(Paths.get(recordDataFile));
+        if (lines.size() < 2) {
+            throw new IllegalArgumentException("파일 형식이 잘못되었습니다.");
+        }
+
+        String fileBaseName = lines.get(0).trim();
+        String filename = fileBaseName + Constants.FILE_EXTENSION;
+        int recordCount = Integer.parseInt(lines.get(1).trim());
+
+        try (RandomAccessFile raf = new RandomAccessFile(filename, "rw")) {
+            File header = new File();
+            header.readFileHeader(raf);
+
+            int fieldCount = header.fieldNames.size();
+            List<String> recordLines = lines.subList(2, lines.size());
+
+            if (recordLines.size() != recordCount) {
+                throw new IllegalArgumentException("레코드 개수와 실제 데이터 줄 수가 일치하지 않습니다.");
+            }
+
+            for (int i = 0; i < recordCount; i++) {
+                String[] fields = recordLines.get(i).split(Constants.DELIMITER);
+                if (fields.length != fieldCount) {
+                    throw new IllegalArgumentException("레코드 " + (i + 1) + "의 필드 개수가 맞지 않습니다: 기대 " + fieldCount + ", 실제 " + fields.length);
+                }
+
+                List<String> recordFields = new ArrayList<>();
+                for (String field : fields) {
+                    recordFields.add(field.equalsIgnoreCase("null") ? null : field);
+                }
+
+                Record rec = new Record(recordFields);
+                header.addRecord(raf, rec);
+            }
+
+            System.out.println(recordCount + "개 레코드 삽입 완료!");
+        }
+    }
+
+    public static List<String> extractFieldValues(String metadataPath) throws IOException {
+        List<String> lines = Files.readAllLines(Paths.get(metadataPath));
+        if (lines.size() < 2) {
+            throw new IllegalArgumentException("메타데이터 파일에 대상 파일명과 필드명이 포함되어야 합니다.");
+        }
+
+        String filename = lines.get(0).trim() + Constants.FILE_EXTENSION; // .bin 붙이기
+        String targetField = lines.get(1).trim();
+
+        List<String> extractedValues = new ArrayList<>();
+
+        try (RandomAccessFile raf = new RandomAccessFile(filename, "r")) {
+            File header = new File();
+            header.readFileHeader(raf);
+
+            int fieldIndex = header.fieldNames.indexOf(targetField);
+            if (fieldIndex == -1) {
+                throw new IllegalArgumentException("지정한 필드명이 존재하지 않습니다: " + targetField);
+            }
+
+            int currentBlockOffset = header.firstBlockOffset;
+            while (currentBlockOffset != -1) {
+                Block block = Block.readBlock(raf, currentBlockOffset, header.fieldSizes);
+                for (Record r : block.records) {
+                    String value = r.fields.get(fieldIndex);
+                    extractedValues.add(Objects.requireNonNullElse(value, "null"));
+                }
+                currentBlockOffset = block.nextBlockOffset;
+            }
+        }
+
+        return extractedValues;
+    }
+
+    public static List<Record> getRecordsInRangeFromFile(String queryFilePath) throws IOException {
+        List<String> lines = Files.readAllLines(Paths.get(queryFilePath));
+        if (lines.size() < 3) {
+            throw new IllegalArgumentException("입력 파일에는 최소 3줄 (파일명, 최솟값, 최댓값)이 필요합니다.");
+        }
+
+        String fileBaseName = lines.get(0).trim();
+        String filename = fileBaseName + Constants.FILE_EXTENSION;
+
+        String minKey = lines.get(1).trim();
+        String maxKey = lines.get(2).trim();
+
+        List<Record> result = new ArrayList<>();
+
+        try (RandomAccessFile raf = new RandomAccessFile(filename, "r")) {
+            File header = new File();
+            header.readFileHeader(raf);
+
+            int currentBlockOffset = header.firstBlockOffset;
+            while (currentBlockOffset != -1) {
+                Block block = Block.readBlock(raf, currentBlockOffset, header.fieldSizes);
+                for (Record record : block.records) {
+                    String key = record.fields.get(0); // 첫 필드를 서치키로 간주
+                    if (key != null && key.compareTo(minKey) >= 0 && key.compareTo(maxKey) <= 0) {
+                        result.add(record);
+                    }
+                }
+                currentBlockOffset = block.nextBlockOffset;
+            }
+        }
+
+        return result;
+    }
+
+    private DBStorageManager() {}
+}
+
+class File {
     int recordCount;
     List<String> fieldNames;
     List<Integer> fieldSizes;
     int firstBlockOffset;
 
-    public FileHeader() {
+    public File() {
         this.recordCount = 0;
         this.fieldNames = new ArrayList<>();
         this.fieldSizes = new ArrayList<>();
@@ -64,7 +242,7 @@ class FileHeader {
     }
 
     // 파일 헤더 쓰기
-    public void writeHeader(RandomAccessFile raf) throws IOException {
+    public void writeFileHeader(RandomAccessFile raf) throws IOException {
         raf.seek(0);
         raf.writeInt(recordCount);
         raf.writeInt(fieldNames.size());
@@ -97,7 +275,7 @@ class FileHeader {
     }
 
     // 파일 헤더 읽기
-    public void readHeader(RandomAccessFile raf) throws IOException {
+    public void readFileHeader(RandomAccessFile raf) throws IOException {
         raf.seek(0);
         this.recordCount = raf.readInt();
         int fieldCount = raf.readInt();
@@ -137,7 +315,7 @@ class FileHeader {
 
             this.recordCount++;
             raf.seek(0);
-            this.writeHeader(raf);
+            this.writeFileHeader(raf);
             return;
         }
 
@@ -177,7 +355,20 @@ class FileHeader {
         // 레코드 수 증가 및 헤더 갱신
         this.recordCount++;
         raf.seek(0);
-        this.writeHeader(raf);
+        this.writeFileHeader(raf);
+    }
+
+    public String getFileName() {
+        return fieldNames.getFirst().toLowerCase() + Constants.FILE_EXTENSION;
+    }
+
+    void printFileHeaderInfo() {
+        System.out.println("레코드 개수: " + recordCount);
+        System.out.println("필드 개수: " + fieldNames.size());
+        for (int i = 0; i < fieldNames.size(); i++) {
+            System.out.printf("필드 %d: %s (%d bytes)%n", i + 1, fieldNames.get(i), fieldSizes.get(i));
+        }
+        System.out.println("첫 블록 offset: " + firstBlockOffset);
     }
 }
 
@@ -196,7 +387,7 @@ class Block {
 
     public static Block readBlock(RandomAccessFile raf, int position, List<Integer> fieldSizes) throws IOException {
         if (position >= raf.length()) {
-            throw new EOFException("📛 잘못된 블록 offset 요청: " + position + " (파일 길이: " + raf.length() + ")");
+            throw new EOFException("잘못된 블록 offset 요청: " + position + " (파일 길이: " + raf.length() + ")");
         }
 
         raf.seek(position);
@@ -397,9 +588,12 @@ class Record {
 }
 
 class Constants {
-    public final static int BLOCK_SIZE = 512;
+    public final static int BLOCK_SIZE = 200;
     public final static int BLOCK_HEADER_SIZE = 12;
     public final static int FIXED_FIELD_NAME_SIZE = 20;
+
+    public final static String FILE_EXTENSION = ".bin";
+    public final static String DELIMITER = "\\s+";
 
     private Constants() {}
 }

@@ -1,0 +1,32 @@
+my_table
+30
+User01 null Seoul
+User02 25 null
+User03 31 null
+User04 null null
+User05 19 Busan
+User06 22 null
+User07 null null
+User08 null Daejeon
+User09 26 null
+User10 30 null
+User11 null null
+User12 24 null
+User13 null Gwangju
+User14 null null
+User15 27 null
+User16 null Incheon
+User17 null null
+User18 28 null
+User19 null null
+User20 21 null
+User21 null null
+User22 32 null
+User23 23 null
+User24 null null
+User25 29 null
+User26 null null
+User27 20 null
+User28 null Ulsan
+User29 18 null
+User30 null null
