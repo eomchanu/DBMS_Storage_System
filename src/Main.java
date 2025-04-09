@@ -5,6 +5,12 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.io.IOException;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+import java.sql.Statement;
+
+
 public class Main {
     public static void main(String[] args) {
         System.setErr(System.out);
@@ -38,7 +44,7 @@ public class Main {
                         System.out.print("데이터가 담긴 파일의 이름을 입력해주세요: ");
                         String inputFile = sc.nextLine();
                         DBStorageManager.createFileHeader(inputFile);
-                        System.out.println("파일 생성 완료");
+                        System.out.println("파일 및 테이블 생성 완료");
                     }
                     case 2 -> {
                         System.out.print("데이터가 담긴 파일의 이름을 입력해주세요: ");
@@ -108,13 +114,14 @@ class DBStorageManager {
         File header = new File();
         header.fieldNames = fieldNames;
         header.fieldSizes = fieldSizes;
-        // TODO: 할당 필요한지 확인 필요 -> 레코드 삽입 함수 구현 후 확인
         header.recordCount = 0;
         header.firstBlockOffset = Constants.BLOCK_SIZE;
 
         try (RandomAccessFile raf = new RandomAccessFile(outputFilename, "rw")) {
             header.writeFileHeader(raf);
         }
+
+        SQLUtil.createMySQLTable(rawFilename, fieldNames, fieldSizes);
     }
 
     public static void insertRecords(String recordDataFile) throws IOException {
@@ -226,6 +233,34 @@ class DBStorageManager {
     }
 
     private DBStorageManager() {}
+}
+
+class SQLUtil {
+    public static void createMySQLTable(String tableName, List<String> fieldNames, List<Integer> fieldSizes) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("CREATE TABLE IF NOT EXISTS `").append(tableName).append("` (\n");
+
+        for (int i = 0; i < fieldNames.size(); i++) {
+            String field = fieldNames.get(i);
+            int size = fieldSizes.get(i);
+            sb.append("  `").append(field).append("` VARCHAR(").append(size).append(")");
+            if (i == 0) sb.append(" PRIMARY KEY");  // 첫 번째 컬럼은 서치키로 사용
+            sb.append(i == fieldNames.size() - 1 ? "\n" : ",\n");
+        }
+
+        sb.append(");");
+
+        try (
+            Connection conn = DriverManager.getConnection(Constants.JDBC_URL, Constants.JDBC_USER, Constants.JDBC_PASSWORD);
+            Statement stmt = conn.createStatement()
+        ) {
+            stmt.executeUpdate(sb.toString());
+        } catch (SQLException e) {
+            System.err.println("[오류] MySQL 테이블 생성 실패: " + e.getMessage());
+        }
+    }
+
+    private SQLUtil() {}
 }
 
 class File {
@@ -594,6 +629,10 @@ class Constants {
 
     public final static String FILE_EXTENSION = ".bin";
     public final static String DELIMITER = "\\s+";
+
+    public static final String JDBC_URL = "jdbc:mysql://localhost:3306/DBMS_storage_system";
+    public static final String JDBC_USER = "root";
+    public static final String JDBC_PASSWORD = "20190564";
 
     private Constants() {}
 }
