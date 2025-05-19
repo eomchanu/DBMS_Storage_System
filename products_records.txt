@@ -1,0 +1,7 @@
+products
+5
+C1 P001 Mouse
+C1 P002 Keyboard
+C2 P003 Monitor
+C2 P004 USB
+C3 P005 Webcam

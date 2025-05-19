@@ -4,85 +4,103 @@ import java.util.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.io.IOException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.PreparedStatement;
+import java.sql.ResultSetMetaData;
+import java.sql.ResultSet;
 
 
 public class Main {
     public static void main(String[] args) {
         System.setErr(System.out);
 
-        Scanner sc = new Scanner(System.in);
+        try (Scanner sc = new Scanner(System.in)) {
+            while(true) {
+                System.out.println("1. 파일 생성");
+                System.out.println("2. 레코드 삽입");
+                System.out.println("3. 조인 질의");
+                System.out.println("4. 프로그램 종료");
+                System.out.print("원하는 작업을 선택하세요 (1~4): ");
 
-        while(true) {
-            System.out.println("1. 파일 생성");
-            System.out.println("2. 레코드 삽입");
-            System.out.println("3. 필드 값 추출");
-            System.out.println("4. 레코드 범위 조회");
-            System.out.println("5. 프로그램 종료");
-            System.out.print("원하는 작업을 선택하세요 (1~5): ");
-
-            int choice;
-            try {
-                choice = Integer.parseInt(sc.nextLine().trim());
-                if (choice < 1 || choice > 5) {
-                    System.err.println("[오류] 1부터 5 사이의 숫자를 입력해주세요.\n");
+                int choice;
+                try {
+                    choice = Integer.parseInt(sc.nextLine().trim());
+                    if (choice < 1 || choice > 4) {
+                        System.err.println("[오류] 1부터 4 사이의 숫자를 입력해주세요.\n");
+                        continue;
+                    }
+                } catch (NumberFormatException e) {
+                    System.out.flush();
+                    System.err.println("[오류] 숫자를 입력해주세요.\n");
                     continue;
                 }
-            } catch (NumberFormatException e) {
-                System.out.flush();
-                System.err.println("[오류] 숫자를 입력해주세요.\n");
-                continue;
-            }
 
-            try {
-                switch (choice) {
-                    case 1 -> {
-                        System.out.print("데이터가 담긴 파일의 이름을 입력해주세요: ");
-                        String inputFile = sc.nextLine();
-                        DBStorageManager.createFileHeader(inputFile);
-                        System.out.println("파일 및 테이블 생성 완료");
-                    }
-                    case 2 -> {
-                        System.out.print("데이터가 담긴 파일의 이름을 입력해주세요: ");
-                        String inputFile = sc.nextLine();
-                        DBStorageManager.insertRecords(inputFile);
-                    }
-                    case 3 -> {
-                        System.out.print("데이터가 담긴 파일의 이름을 입력해주세요: ");
-                        String inputFile = sc.nextLine();
-                        List<String> values = DBStorageManager.extractFieldValues(inputFile);
-                        System.out.println("필드 값들:");
-                        for (String val : values) {
-                            System.out.println(val);
+                try {
+                    switch (choice) {
+                        case 1 -> {
+                            System.out.print("데이터가 담긴 파일의 이름을 입력해주세요: ");
+                            String inputFile = sc.nextLine();
+                            DBStorageManager.createFileHeader(inputFile);
+                            System.out.println("파일 및 테이블 생성 완료");
                         }
-                    }
-                    case 4 -> {
-                        System.out.print("데이터가 담긴 파일의 이름을 입력해주세요: ");
-                        String inputFile = sc.nextLine();
-                        List<Record> records = DBStorageManager.getRecordsInRangeFromFile(inputFile);
-                        System.out.println("범위 내 레코드:");
-                        for (Record r : records) {
-                            System.out.println(r);
+                        case 2 -> {
+                            System.out.print("데이터가 담긴 파일의 이름을 입력해주세요: ");
+                            String inputFile = sc.nextLine();
+                            DBStorageManager.insertRecords(inputFile);
                         }
+                        case 3 -> {
+                            System.out.print("조인 질의 입력: ");
+                            String sqlQuery = sc.nextLine();
+
+                            System.out.println(">> 구현 Merge Join 결과:");
+                            DBQueryProcessor.executeMergeJoin(sqlQuery);
+
+                            System.out.println();
+                            System.out.println(">> SQL 질의문 수행 결과:");
+                            SQLUtil.executeSQLJoinQuery(sqlQuery);
+                        }
+
+                        case 4 -> {
+                            System.out.println("프로그램을 종료합니다.");
+                            System.exit(0);
+                        }
+                        // case 3 -> {
+                        //     System.out.print("데이터가 담긴 파일의 이름을 입력해주세요: ");
+                        //     String inputFile = sc.nextLine();
+                        //     List<String> values = DBStorageManager.extractFieldValues(inputFile);
+                        //     System.out.println("필드 값들:");
+                        //     for (String val : values) {
+                        //         System.out.println(val);
+                        //     }
+                        // }
+                        // case 4 -> {
+                        //     System.out.print("데이터가 담긴 파일의 이름을 입력해주세요: ");
+                        //     String inputFile = sc.nextLine();
+                        //     List<Record> records = DBStorageManager.getRecordsInRangeFromFile(inputFile);
+                        //     System.out.println("범위 내 레코드:");
+                        //     for (Record r : records) {
+                        //         System.out.println(r);
+                        //     }
+                        // }
+                        default -> System.out.println("유효하지 않은 선택입니다. 1부터 4 사이의 숫자를 입력해주세요.\n");
                     }
-                    case 5 -> {
-                        System.out.println("프로그램을 종료합니다.");
-                        System.exit(0);
-                    }
-                    default -> System.out.println("유효하지 않은 선택입니다. 1부터 5 사이의 숫자를 입력해주세요.\n");
+                } catch (java.nio.file.NoSuchFileException e) {
+                    System.err.println("존재하지 않는 파일입니다.\n");
+                } catch (IOException e) {
+                    System.out.println("입출력 오류: " + e.getClass().getSimpleName() + " - " + e.getMessage());
+                } catch (IllegalArgumentException e) {
+                    System.err.println("입력 오류: " + e.getMessage() + "\n");
+                } catch (Exception e) {
+                    System.err.println("예상치 못한 오류가 발생했습니다: " + e.getMessage() + "\n");
                 }
-            } catch (java.nio.file.NoSuchFileException e) {
-                System.err.println("[오류] 존재하지 않는 파일입니다.\n");
-            } catch (IOException e) {
-                System.err.println("[오류] 입출력 오류: " + e.getMessage() + "\n");
-            } catch (IllegalArgumentException e) {
-                System.err.println("[오류] 입력 오류: " + e.getMessage() + "\n");
-            } catch (Exception e) {
-                System.err.println("[오류] 예상치 못한 오류가 발생했습니다: " + e.getMessage() + "\n");
+
+                System.out.println();
             }
         }
     }
@@ -146,15 +164,16 @@ class DBStorageManager {
             }
 
             for (int i = 0; i < recordCount; i++) {
-                String[] fields = recordLines.get(i).split(Constants.DELIMITER);
-                if (fields.length != fieldCount) {
-                    throw new IllegalArgumentException("레코드 " + (i + 1) + "의 필드 개수가 맞지 않습니다: 기대 " + fieldCount + ", 실제 " + fields.length);
+                List<String> fields = List.of(recordLines.get(i).split(Constants.DELIMITER));
+                if (fields.size() != fieldCount) {
+                    throw new IllegalArgumentException("레코드 " + (i + 1) + "의 필드 개수가 맞지 않습니다: 기대 " + fieldCount + ", 실제 " + fields.size());
                 }
 
                 List<String> recordFields = new ArrayList<>();
                 for (String field : fields) {
                     recordFields.add(field.equalsIgnoreCase("null") ? null : field);
                 }
+                SQLUtil.insertTuple(fileBaseName, fields);
 
                 Record rec = new Record(recordFields);
                 header.addRecord(raf, rec);
@@ -235,6 +254,143 @@ class DBStorageManager {
     private DBStorageManager() {}
 }
 
+class DBQueryProcessor {
+    public static void executeMergeJoin(String sqlQuery) throws IOException {
+        Pattern pattern = Pattern.compile(
+                "from\\s+(\\w+)\\s*,\\s*(\\w+)\\s+where\\s+(\\w+)\\.(\\w+)\\s*=\\s*(\\w+)\\.(\\w+)(?:\\s+order\\s+by\\s+(\\w+))?",
+                Pattern.CASE_INSENSITIVE);
+        Matcher matcher = pattern.matcher(sqlQuery);
+
+        if (!matcher.find()) {
+            throw new IllegalArgumentException("SQL 문법이 잘못되었거나 지원되지 않는 문법입니다.");
+        }
+
+        String tableA = matcher.group(1);
+        String tableB = matcher.group(2);
+
+        String leftTable = matcher.group(3);
+        String leftKey = matcher.group(4);
+        // String rightTable = matcher.group(5);
+        String rightKey = matcher.group(6);
+        // String orderBy = matcher.group(7);
+
+        // 조인 키 결정 (어느 키가 어느 테이블인지 확인)
+        String keyA, keyB;
+        if (leftTable.equalsIgnoreCase(tableA)) {
+            keyA = leftKey;
+            keyB = rightKey;
+        } else {
+            keyA = rightKey;
+            keyB = leftKey;
+        }
+
+        String fileAPath = tableA + Constants.FILE_EXTENSION;
+        String fileBPath = tableB + Constants.FILE_EXTENSION;
+
+        try (RandomAccessFile rafA = new RandomAccessFile(fileAPath, "r");
+            RandomAccessFile rafB = new RandomAccessFile(fileBPath, "r")) {
+
+            File headerA = new File(); headerA.readFileHeader(rafA);
+            File headerB = new File(); headerB.readFileHeader(rafB);
+
+            int indexA = headerA.fieldNames.indexOf(keyA);
+            int indexB = headerB.fieldNames.indexOf(keyB);
+
+            int offsetA = headerA.firstBlockOffset;
+            int offsetB = headerB.firstBlockOffset;
+
+            Block blockA = (offsetA != -1) ? Block.readBlock(rafA, offsetA, headerA.fieldSizes) : null;
+            Block blockB = (offsetB != -1) ? Block.readBlock(rafB, offsetB, headerB.fieldSizes) : null;
+
+            List<Record> recordsA = (blockA != null) ? blockA.records : List.of();
+            List<Record> recordsB = (blockB != null) ? blockB.records : List.of();
+
+            int idxA = 0, idxB = 0;
+
+            while (blockA != null && blockB != null) {
+                if (idxA >= recordsA.size()) {
+                    offsetA = blockA.nextBlockOffset;
+                    blockA = (offsetA != -1) ? Block.readBlock(rafA, offsetA, headerA.fieldSizes) : null;
+                    recordsA = (blockA != null) ? blockA.records : List.of();
+                    idxA = 0;
+                    continue;
+                }
+
+                if (idxB >= recordsB.size()) {
+                    offsetB = blockB.nextBlockOffset;
+                    blockB = (offsetB != -1) ? Block.readBlock(rafB, offsetB, headerB.fieldSizes) : null;
+                    recordsB = (blockB != null) ? blockB.records : List.of();
+                    idxB = 0;
+                    continue;
+                }
+
+                Record ra = recordsA.get(idxA);
+                Record rb = recordsB.get(idxB);
+
+                String keyValA = ra.fields.get(indexA);
+                String keyValB = rb.fields.get(indexB);
+                int cmp = keyValA.compareTo(keyValB);
+
+                if (cmp < 0) {
+                    idxA++;
+                } else if (cmp > 0) {
+                    idxB++;
+                } else {
+                    // matchKey 기준 그룹 수집
+                    String matchKey = keyValA;
+                    List<Record> groupA = new ArrayList<>();
+                    List<Record> groupB = new ArrayList<>();
+
+                    // A 그룹 수집
+                    while (blockA != null) {
+                        while (idxA < recordsA.size()) {
+                            Record r = recordsA.get(idxA);
+                            if (!r.fields.get(indexA).equals(matchKey)) break;
+                            groupA.add(r);
+                            idxA++;
+                        }
+                        if (idxA < recordsA.size()) break;
+                        offsetA = blockA.nextBlockOffset;
+                        blockA = (offsetA != -1) ? Block.readBlock(rafA, offsetA, headerA.fieldSizes) : null;
+                        recordsA = (blockA != null) ? blockA.records : List.of();
+                        idxA = 0;
+                        if (recordsA.isEmpty()) break;
+                        if (!recordsA.get(0).fields.get(indexA).equals(matchKey)) break;
+                    }
+
+                    // B 그룹 수집
+                    while (blockB != null) {
+                        while (idxB < recordsB.size()) {
+                            Record r = recordsB.get(idxB);
+                            if (!r.fields.get(indexB).equals(matchKey)) break;
+                            groupB.add(r);
+                            idxB++;
+                        }
+                        if (idxB < recordsB.size()) break;
+                        offsetB = blockB.nextBlockOffset;
+                        blockB = (offsetB != -1) ? Block.readBlock(rafB, offsetB, headerB.fieldSizes) : null;
+                        recordsB = (blockB != null) ? blockB.records : List.of();
+                        idxB = 0;
+                        if (recordsB.isEmpty()) break;
+                        if (!recordsB.get(0).fields.get(indexB).equals(matchKey)) break;
+                    }
+
+                    // Cross product
+                    for (Record a : groupA) {
+                        for (Record b : groupB) {
+                            List<String> joined = new ArrayList<>(a.fields);
+                            joined.addAll(b.fields);
+                            System.out.println(String.join(", ", joined));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private DBQueryProcessor() {}
+}
+
 class SQLUtil {
     public static void createMySQLTable(String tableName, List<String> fieldNames, List<Integer> fieldSizes) {
         StringBuilder sb = new StringBuilder();
@@ -243,8 +399,8 @@ class SQLUtil {
         for (int i = 0; i < fieldNames.size(); i++) {
             String field = fieldNames.get(i);
             int size = fieldSizes.get(i);
-            sb.append("  `").append(field).append("` VARCHAR(").append(size).append(")");
-            if (i == 0) sb.append(" PRIMARY KEY");  // 첫 번째 컬럼은 서치키로 사용
+            sb.append("  `").append(field).append("` CHAR(").append(size).append(")");
+            // if (i == 0) sb.append(" PRIMARY KEY"); // 첫 필드는 주요 키로
             sb.append(i == fieldNames.size() - 1 ? "\n" : ",\n");
         }
 
@@ -256,7 +412,47 @@ class SQLUtil {
         ) {
             stmt.executeUpdate(sb.toString());
         } catch (SQLException e) {
-            System.err.println("[오류] MySQL 테이블 생성 실패: " + e.getMessage());
+            System.err.println("MySQL 테이블 생성 실패: " + e.getMessage());
+        }
+    }
+
+    // 튜플 삽입 기능
+    public static void insertTuple(String tableName, List<String> values) {
+        String placeholders = String.join(", ", values.stream().map(_ -> "?").toArray(String[]::new));
+        String query = "INSERT INTO `" + tableName + "` VALUES (" + placeholders + ")";
+
+        try (
+            Connection conn = DriverManager.getConnection(Constants.JDBC_URL, Constants.JDBC_USER, Constants.JDBC_PASSWORD);
+            PreparedStatement pstmt = conn.prepareStatement(query)
+        ) {
+            for (int i = 0; i < values.size(); i++) {
+                pstmt.setString(i + 1, values.get(i));
+            }
+            pstmt.executeUpdate();
+        } catch (SQLException e) {
+            System.err.println("튜플 삽입 실패: " + e.getMessage());
+        }
+    }
+
+    // SQL 질의문 수행 및 결과 출력
+    public static void executeSQLJoinQuery(String sqlQuery) {
+        try (
+            Connection conn = DriverManager.getConnection(Constants.JDBC_URL, Constants.JDBC_USER, Constants.JDBC_PASSWORD);
+            Statement stmt = conn.createStatement();
+            ResultSet rs = stmt.executeQuery(sqlQuery)
+        ) {
+            ResultSetMetaData meta = rs.getMetaData();
+            int columnCount = meta.getColumnCount();
+
+            while (rs.next()) {
+                for (int i = 1; i <= columnCount; i++) {
+                    System.out.print(rs.getString(i));
+                    if (i < columnCount) System.out.print(", ");
+                }
+                System.out.println();
+            }
+        } catch (SQLException e) {
+            System.err.println("SQL JOIN 수행 실패: " + e.getMessage());
         }
     }
 
@@ -439,7 +635,7 @@ class Block {
 
         for (int i = 0; i < recordCount; i++) {
             if (currentOffset >= raf.length()) {
-                System.err.println("❌ 레코드 offset이 파일 길이보다 큽니다: " + currentOffset);
+                System.err.println("레코드 offset이 파일 길이보다 큽니다: " + currentOffset);
                 break;
             }
             Record record = Record.readRecord(raf, currentOffset, fieldSizes);
@@ -491,7 +687,7 @@ class Block {
         while (offset != -1) {
             current = findRecordByOffset(offset, fieldSizes);
             if (current == null) {
-                System.err.println("❌ 오류: offset " + offset + "에 해당하는 레코드를 찾을 수 없습니다.");
+                System.err.println("offset " + offset + "에 해당하는 레코드를 찾을 수 없습니다.");
                 break;
             }
             String currentKey = current.fields.getFirst();
@@ -623,7 +819,7 @@ class Record {
 }
 
 class Constants {
-    public final static int BLOCK_SIZE = 200;
+    public final static int BLOCK_SIZE = 100;
     public final static int BLOCK_HEADER_SIZE = 12;
     public final static int FIXED_FIELD_NAME_SIZE = 20;
 

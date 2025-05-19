@@ -1,0 +1,4 @@
+products
+3
+category_id product_id name
+2 4 10
